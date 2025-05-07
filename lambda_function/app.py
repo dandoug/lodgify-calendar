@@ -1,47 +1,248 @@
-import json
+"""
+Call Lodgify API to get availability and rates for a given property and date range.
+"""
 import datetime
+import json
+import logging
+import os
+import sys
+from typing import Any
+
+import requests
+
+TIMEOUT = 10
+
+LODGIFY_API_BASE = 'https://api.lodgify.com'
 
 
-def lambda_handler(event, context):
-    # Parse query parameters for start and end dates
-    query_params = event.get("queryStringParameters", {})
+# pylint: disable=too-many-locals
+def lambda_handler(event, _context):
+    """
+    Handles an AWS Lambda function to fetch and process availability and rate data
+    for a given property and date range by interacting with Lodgify's API. The function
+    validates the input parameters, retrieves data from Lodgify, processes it to
+    determine availability and rates for a specific property, and returns the
+    information in a structured JSON format.
 
-    # Get the current date
-    today = datetime.date.today()
+    Parameters:
+        event (dict): AWS Lambda event object containing HTTP request details such
+            as query parameters.
+        _context (Any): AWS Lambda context object providing runtime information.
 
-    # Default start date: first day of the current month
-    start_date = datetime.datetime.strptime(
-        query_params.get("startDate", today.replace(day=1).isoformat()),
-        "%Y-%m-%d"
-    ).date()
+    Returns:
+        dict: A JSON-compatible dictionary representing availability and rate
+            information for the given property and dates.
+    """
+    # extract input from query params and validate
+    end_date, start_date, property_id, error = _validate_query_parms(event)
+    if error:
+        return error
 
-    # Default end date: two months after the start date
-    end_date = datetime.datetime.strptime(
-        query_params.get("endDate", (start_date + datetime.timedelta(days=60)).isoformat()),
-        "%Y-%m-%d"
-    ).date()
+    # Call Lodgify to get availability and rates
+    availability, rates, error = _get_availability_and_rates(property_id, start_date, end_date)
+    if error:
+        return error
 
-    date_range = (end_date - start_date).days + 1
-
-    # Build calendar data
     dates = {}
+    return_data = {
+        "startDate": start_date.isoformat(),
+        "endDate": end_date.isoformat(),
+        "propertyId": property_id,
+        "room_type_id": availability.get('room_type_id', ''),
+        "currency_code": rates.get('rate_settings', {}).get('currency_code', 'USD'),
+        "dates": dates
+    }
+    # Build calendar data
+    advanced_notice_days = rates.get('rate_settings', {}).get('advance_notice_days', 2)
+    first_bookable_day = datetime.date.today() + datetime.timedelta(days=advanced_notice_days)
+
+    # initialize the date map with empty entries
+    date_range = (end_date - start_date).days + 1
     for i in range(date_range):
         current_date = start_date + datetime.timedelta(days=i)
-        if i % 5 == 0:  # Simulate some unavailable dates
-            dates[current_date.isoformat()] = {"available": False}
-        else:
-            dates[current_date.isoformat()] = {"available": True, "price": 100 + i * 5}
+        dates[current_date.isoformat()] = {}
+
+    # process the periods and mark the entries as available or not available
+    for period in availability.get('periods', []):
+        period_available = period['available'] == 1
+        period_date = _date_from_str(period['start'])
+        period_end = _date_from_str(period['end'])
+        while period_end >= period_date:
+            if period_available and period_date >= first_bookable_day:
+                dates[period_date.isoformat()]["available"] = True
+            else:
+                dates[period_date.isoformat()]["available"] = False
+            period_date += datetime.timedelta(days=1)
+
+    # for all the rates now, add them to their available day
+    for cal in rates.get('calendar_items', []):
+        if not cal.get('date'):
+            continue  # skip any rates without a date
+        rate_date = cal['date']
+        if not dates[rate_date].get('available'):
+            continue  # don't need rates in unavailable days
+        prices = cal.get('prices', [])
+        price = None
+        if isinstance(prices, list) and len(prices) > 0:  # Check if prices is a valid list
+            price = prices[0].get('price_per_day')  # Access the first element and fetch 'price_per_day'
+        if price:
+            dates[rate_date]['price'] = price
 
     # Return JSON response
+    return _build_response(200, return_data)
+
+
+def _get_availability_and_rates(property_id, start_date, end_date):
+    api_key, error = _get_api_key()
+    if error:
+        return None, None, error
+
+    room_type_id = None
+    rates = {}
+    with requests.Session() as session:
+        session.headers.update({
+            'X-ApiKey': api_key,
+            'Accept': 'application/json'
+        })
+        #  Get property availability
+        date_query = f"start={start_date.isoformat()}&" + \
+                     f"end={end_date.isoformat()}"
+        url = (f"{LODGIFY_API_BASE}/v2/availability/{property_id}" +
+               f"?includeDetails=true&{date_query}")
+        try:
+            response = session.get(url, timeout=TIMEOUT)
+            if response.status_code != 200:
+                error = _build_error_response(
+                    500,
+                    f"Error fetching availability: {response.status_code} {response.text}")
+            else:
+                availability = response.json()[0]  # assume that just one roomType in prop
+                room_type_id = availability.get('room_type_id', '')
+        except requests.exceptions.RequestException as e:
+            error = _build_error_response(500, f"Error fetching availability: {e}")
+
+        if not error:
+            # get rates
+            try:
+                date_query = f"StartDate={start_date.isoformat()}&" + \
+                             f"EndDate={end_date.isoformat()}"
+                url = (f"{LODGIFY_API_BASE}/v2/rates/calendar?RoomTypeId={room_type_id}" +
+                       f"&HouseId={property_id}&{date_query}")
+                response = session.get(url, timeout=TIMEOUT)
+                if response.status_code != 200:
+                    error = _build_error_response(
+                        500,
+                        f"Error fetching rates: {response.status_code} {response.text}")
+                else:
+                    rates = response.json()
+            except requests.exceptions.RequestException as e:
+                error = _build_error_response(500, f"Error fetching availability: {e}")
+
+    return availability, rates, error
+
+
+def _build_error_response(status_code: int, message: str) -> dict[str, Any]:
+    logging.error("%s: %s", status_code, message)
+    return _build_response(status_code, {"error": message})
+
+
+def _build_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     return {
-        "statusCode": 200,
-        "body": json.dumps({
-            "startDate": start_date.isoformat(),
-            "endDate": end_date.isoformat(),
-            "dates": dates
-        }),
+        "statusCode": status_code,
+        "body": json.dumps(body),
         "headers": {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",  # Allow requests from any origin
+            "Access-Control-Allow-Origin": "*"
         }
     }
+
+
+def _get_api_key():
+    secret_service_url_base = os.environ.get('SECRET_SERVICE_BASE_URL')
+    secret_name = os.environ.get('SECRET_NAME')
+    url = f"{secret_service_url_base}/secretsmanager/get?secretId={secret_name}"
+    headers = {"X-Aws-Parameters-Secrets-Token": os.environ.get('AWS_SESSION_TOKEN')}
+    api_key = None
+    try:
+        response = requests.get(url, headers=headers, timeout=5)
+        error = None
+        api_key = None
+        if response.status_code != 200:
+            error = _build_error_response(
+                500,
+                f"Error fetching secret {secret_name}: {response.status_code} {response.text}")
+        else:
+            api_key = response.json()['SecretString']
+    except requests.exceptions.RequestException as e:
+        error = _build_error_response(500, f"Error fetching secret {secret_name}: {e}")
+    return api_key, error
+
+
+def _validate_query_parms(event):
+    # Parse query parameters for start and end dates
+    query_params = event.get("queryStringParameters", {})
+    error = None
+
+    property_id = query_params.get("propertyId")
+    if not property_id:
+        error = _build_error_response(400, "Missing propertyId query parameter")
+    start_date = "#####"
+    if not error:
+        # Default start date: first day of the current month
+        try:
+            today = datetime.date.today()
+            start_date = _date_from_str(query_params.get("startDate",
+                                                         today.replace(day=1).isoformat()))
+        except ValueError as e:
+            error = _build_error_response(400,
+                                          f"Invalid start date: {start_date} {e}")
+    # Default end date: two months after the start date
+    end_date = "#####"
+    if not error:
+        try:
+            end_date = _date_from_str(
+                query_params.get("endDate",
+                                 (start_date + datetime.timedelta(days=60)).isoformat()))
+        except ValueError as e:
+            error = _build_error_response(400,
+                                          f"Invalid end date: {end_date} {e}")
+    # Validate date range
+    if end_date < start_date:
+        error = _build_error_response(400, "End date cannot be before start date")
+    # Check if the date range exceeds 6 months
+    if (end_date - start_date).days > 180:  # approximately 6 months
+        error = _build_error_response(400, "Date range cannot exceed 6 months")
+
+    return end_date, start_date, property_id, error
+
+
+def _date_from_str(date_str):
+    return datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+
+
+if __name__ == "__main__":
+    _property_id = sys.argv[1]
+
+    # Create a sample event
+    test_event = {
+        "queryStringParameters": {
+            "propertyId": _property_id,
+            "startDate": "2025-05-01",
+            "endDate": "2025-06-30"
+        }
+    }
+
+    # pylint: disable=too-few-public-methods
+    class _StubContext:
+        """
+        Stub context object for testing Lambda functions.
+        """
+        def __init__(self):
+            self.function_name = "lambda_handler"
+            self.function_version = "$LATEST"
+            self.memory_limit_in_mb = 128
+
+
+    # Call the handler
+    result = lambda_handler(test_event, _StubContext())
+    print(json.dumps(result, indent=2))

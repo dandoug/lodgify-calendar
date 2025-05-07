@@ -7,6 +7,10 @@ Resources:
       CodeUri: lambda_function/
       Handler: app.lambda_handler
       Runtime: python3.11
+      Environment:
+        Variables:
+          SECRET_SERVICE_BASE_URL: ""
+          SECRET_NAME: ""
       Events:
         CalendarAPI:
           Type: Api
