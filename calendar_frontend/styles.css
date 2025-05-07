@@ -1,0 +1,46 @@
+/* Style for price display */
+.flatpickr-day.has-price {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  cursor: default !important; /* Disable pointer cursor */
+  align-items: center;
+  height: 100%; /* Keep the content properly centered */
+}
+
+.flatpickr-day.has-price span.day-number {
+  display: block;
+  font-size: 1rem;
+  font-weight: bold;
+  color: #343a40; /* Dark color for day-number */
+  height: 29px;
+}
+
+.flatpickr-day.has-price span.day-price {
+  display: block;
+  font-size: 0.7rem; /* Slightly smaller font size for the price */
+  color: #28a745; /* Green color for price */
+  height: 10px;
+  line-height: 10px;
+  margin-top: 0; /* Ensure there is no spacing above the price */
+}
+
+/* Style for unavailable days */
+.flatpickr-day.unavailable {
+  background-color: transparent !important; /* Remove background circle */
+  color: #d6d6d6 !important; /* Very light grey for the day-number */
+  cursor: default !important; /* Disable pointer cursor for unavailable days */
+  border: none !important; /* Remove any borders or circles */
+  pointer-events: none; /* Prevent hover or click effects */
+}
+
+/* Ensure unavailable day number matches general text structure */
+.flatpickr-day.unavailable span.day-number {
+  font-size: 1rem;
+  color: #d6d6d6 !important; /* Light grey for unavailable day numbers */
+}
+
+.dayContainer {
+  margin-bottom: 3px;
+}
