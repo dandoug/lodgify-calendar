@@ -11,7 +11,7 @@ from typing import Any
 
 import requests
 
-TIMEOUT = 10
+TIMEOUT = 6
 
 LODGIFY_API_BASE = 'https://api.lodgify.com'
 
@@ -206,8 +206,17 @@ def _get_availability_and_rates(property_id, room_type_id, start_date, end_date,
         future_rates = executor.submit(_get_rates, property_id, room_type_id,
                                        start_date, end_date, headers, origin)
         # wait for the results
-        availability, availability_error = future_availability.result()
-        rates, rates_error = future_rates.result()
+        try:
+            # Wait for the results with a timeout
+            availability, availability_error = future_availability.result(timeout=TIMEOUT)
+            rates, rates_error = future_rates.result(timeout=TIMEOUT)
+        except TimeoutError as e:
+            # Handle timeout errors for the futures
+            error = _build_error_response(
+                500, f"Request timed out while fetching availability or rates {e}", origin
+            )
+            return None, None, error
+
 
     # return the results and an error if there was one
     return availability, rates, availability_error if availability_error else rates_error
