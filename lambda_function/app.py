@@ -18,6 +18,18 @@ LODGIFY_API_BASE = 'https://api.lodgify.com'
 # Global variable to hold the cached API key
 _cached_api_key = None
 
+# Optionally set log level from environment variable
+log_level = os.environ.get("LOGLEVEL", "WARN").upper()
+
+logging.basicConfig()
+logging.getLogger().setLevel(log_level)
+logging.getLogger("urllib3").setLevel(logging.DEBUG)
+
+from http.client import HTTPConnection
+
+if log_level == "DEBUG":
+    HTTPConnection.debuglevel = 1
+
 
 # pylint: disable=too-many-locals
 def lambda_handler(event, _context):
@@ -237,7 +249,9 @@ def _get_api_key(origin):
                 f"Error fetching secret {secret_name}: {response.status_code} {response.text}", origin)
             return None, error
         # Cache the API key in memory
-        _cached_api_key = response.json()['SecretString']
+        # logging.debug("Secret received: %s", response.json())
+        secret_json = json.loads(response.json()['SecretString'])
+        _cached_api_key = secret_json['LODGIFY_API_KEY']
     except requests.exceptions.RequestException as e:
         error = _build_error_response(500, f"Error fetching secret {secret_name}: {e}", origin)
         return None, error
