@@ -17,6 +17,7 @@ Resources:
       CodeUri: lambda_function/
       Handler: app.lambda_handler
       Runtime: python3.11
+      MemorySize: 128
       Timeout: 6
       Architectures:
         - !Ref Architecture
