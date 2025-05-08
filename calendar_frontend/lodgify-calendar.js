@@ -39,7 +39,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
           const priceSpan = document.createElement("span");
           priceSpan.classList.add("day-price");
-          priceSpan.textContent = `$${apiData[date].price}`;
+          priceSpan.textContent = `${apiData[date].price}`; // currency symbol is added by css
 
           day.appendChild(dayNumberSpan);
           day.appendChild(priceSpan);

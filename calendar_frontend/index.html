@@ -11,10 +11,10 @@
 
 </head>
 <body>
-  <!-- set data-property-id to the Lodgify property id, only one room type supported    -->
-  <!-- no currency conversion done... comes back in whatever current rate was defined   -->
-  <!-- also the $ in the display are hardcoded rn, so really only USD works, but that's -->
-  <!-- a fixable problem.                                                               -->
+  <!-- set data-property-id to the Lodgify property id, and data-room-type-id to the    -->
+  <!-- Lodgify room type id.  No currency conversion is done. Price comes back in       -->
+  <!-- the currency used by the property.  The currency symbol is defined in the CSS    -->
+  <!-- file.  Override '.flatpickr-day.has-price span.day-price::before' to change it.  -->
   <div id="calendar" data-property-id="669875" data-room-type-id="736837"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>

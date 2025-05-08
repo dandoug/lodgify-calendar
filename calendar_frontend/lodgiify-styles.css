@@ -20,10 +20,14 @@
 .flatpickr-day.has-price span.day-price {
   display: block;
   font-size: 0.7rem; /* Slightly smaller font size for the price */
-  color: #28a745; /* Green color for price */
+  color: #28a745; /* Green color for price (and inherited by ::before) */
   height: 10px;
   line-height: 10px;
   margin-top: 0; /* Ensure there is no spacing above the price */
+}
+
+.flatpickr-day.has-price span.day-price::before {
+  content: '$'; /* override this current symbol if you want a different one*/
 }
 
 /* Style for unavailable days */
