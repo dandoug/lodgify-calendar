@@ -37,14 +37,20 @@ def lambda_handler(event, _context):
         dict: A JSON-compatible dictionary representing availability and rate
             information for the given property and dates.
     """
+
+    # Check origin
+    origin, error = _check_origin(event)
+    if error:
+        return error
+
     # extract input from query params and validate
-    end_date, start_date, property_id, room_type_id, error = _validate_query_parms(event)
+    end_date, start_date, property_id, room_type_id, error = _validate_query_parms(event, origin)
     if error:
         return error
 
     # Call Lodgify to get availability and rates
     availability, rates, error = _get_availability_and_rates(property_id, room_type_id,
-                                                             start_date, end_date)
+                                                             start_date, end_date, origin)
     if error:
         return error
 
@@ -94,10 +100,30 @@ def lambda_handler(event, _context):
             dates[rate_date]['price'] = price
 
     # Return JSON response
-    return _build_response(200, return_data)
+    return _build_response(200, return_data, origin)
 
 
-def _get_availability(property_id, room_type_id, start_date, end_date, headers):
+def _is_origin_allowed(origin: str, cors_whitelist: str) -> bool:
+    if cors_whitelist == "*":
+        return True
+    if not origin:
+        return False
+    allowed_origins = cors_whitelist.split(",")
+    return origin.lower() in allowed_origins
+
+
+def _check_origin(event):
+    cors_whitelist = os.getenv("CORS_WHITELIST", "*")
+    origin = event.get("headers", {}).get("Origin", "*")
+    error = None
+    if not _is_origin_allowed(origin, cors_whitelist):
+        error = _build_error_response(403, f"Origin not allowed, {origin}", "null")
+    if cors_whitelist == "*":
+        origin = "*"
+    return origin, error
+
+
+def _get_availability(property_id, room_type_id, start_date, end_date, headers, origin):
 
     availability = None
     error = None
@@ -111,7 +137,7 @@ def _get_availability(property_id, room_type_id, start_date, end_date, headers):
         if response.status_code != 200:
             error = _build_error_response(
                 500,
-                f"Error fetching availability: {response.status_code} {response.text}")
+                f"Error fetching availability: {response.status_code} {response.text}", origin)
         else:
             # find the availability that matches the room_type_id
             availability = None
@@ -120,15 +146,15 @@ def _get_availability(property_id, room_type_id, start_date, end_date, headers):
                     availability = room
                     break
     except requests.exceptions.RequestException as e:
-        error = _build_error_response(500, f"Error fetching availability: {e}")
+        error = _build_error_response(500, f"Error fetching availability: {e}", origin)
 
     if not error and not availability:
-        error = _build_error_response(404, f"Room type {room_type_id} not found")
+        error = _build_error_response(404, f"Room type {room_type_id} not found", origin)
 
     return availability, error
 
 
-def _get_rates(property_id, room_type_id, start_date, end_date, headers):
+def _get_rates(property_id, room_type_id, start_date, end_date, headers, origin):
 
     rates = {}
     error = None
@@ -142,18 +168,18 @@ def _get_rates(property_id, room_type_id, start_date, end_date, headers):
         if response.status_code != 200:
             error = _build_error_response(
                 500,
-                f"Error fetching rates: {response.status_code} {response.text}")
+                f"Error fetching rates: {response.status_code} {response.text}", origin)
         else:
             rates = response.json()
     except requests.exceptions.RequestException as e:
-        error = _build_error_response(500, f"Error fetching availability: {e}")
+        error = _build_error_response(500, f"Error fetching availability: {e}", origin)
 
     return rates, error
 
 
-def _get_availability_and_rates(property_id, room_type_id, start_date, end_date):
+def _get_availability_and_rates(property_id, room_type_id, start_date, end_date, origin):
     # Get the API key we need to build the headers used for both requests
-    api_key, error = _get_api_key()
+    api_key, error = _get_api_key(origin)
     if error:
         return None, None, error
     headers = {
@@ -164,9 +190,9 @@ def _get_availability_and_rates(property_id, room_type_id, start_date, end_date)
     # Call Lodgify to get availability and rates in parallel
     with ThreadPoolExecutor(max_workers=2) as executor:
         future_availability = executor.submit(_get_availability, property_id, room_type_id,
-                                              start_date, end_date, headers)
+                                              start_date, end_date, headers, origin)
         future_rates = executor.submit(_get_rates, property_id, room_type_id,
-                                       start_date, end_date, headers)
+                                       start_date, end_date, headers, origin)
         # wait for the results
         availability, availability_error = future_availability.result()
         rates, rates_error = future_rates.result()
@@ -175,23 +201,23 @@ def _get_availability_and_rates(property_id, room_type_id, start_date, end_date)
     return availability, rates, availability_error if availability_error else rates_error
 
 
-def _build_error_response(status_code: int, message: str) -> dict[str, Any]:
+def _build_error_response(status_code: int, message: str, origin="null") -> dict[str, Any]:
     logging.error("%s: %s", status_code, message)
-    return _build_response(status_code, {"error": message})
+    return _build_response(status_code, {"error": message}, origin=origin)
 
 
-def _build_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
+def _build_response(status_code: int, body: dict[str, Any], origin="null") -> dict[str, Any]:
     return {
         "statusCode": status_code,
         "body": json.dumps(body),
         "headers": {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
+            "Access-Control-Allow-Origin": f"{origin}"
         }
     }
 
 
-def _get_api_key():
+def _get_api_key(origin):
     global _cached_api_key  # Use the global variable
     if _cached_api_key is not None:
         # Return the cached API key if it's already fetched
@@ -208,30 +234,29 @@ def _get_api_key():
         if response.status_code != 200:
             error = _build_error_response(
                 500,
-                f"Error fetching secret {secret_name}: {response.status_code} {response.text}"
-            )
+                f"Error fetching secret {secret_name}: {response.status_code} {response.text}", origin)
             return None, error
         # Cache the API key in memory
         _cached_api_key = response.json()['SecretString']
     except requests.exceptions.RequestException as e:
-        error = _build_error_response(500, f"Error fetching secret {secret_name}: {e}")
+        error = _build_error_response(500, f"Error fetching secret {secret_name}: {e}", origin)
         return None, error
 
     return _cached_api_key, None
 
 
-def _validate_query_parms(event):
+def _validate_query_parms(event, origin):
     # Parse query parameters for start and end dates
     query_params = event.get("queryStringParameters", {})
     error = None
 
     property_id = query_params.get("propertyId")
     if not property_id:
-        error = _build_error_response(400, "Missing propertyId query parameter")
+        error = _build_error_response(400, "Missing propertyId query parameter", origin)
 
     room_type_id = query_params.get("roomTypeId")
     if not room_type_id:
-        error = _build_error_response(400, "Missing roomTypeId query parameter")
+        error = _build_error_response(400, "Missing roomTypeId query parameter", origin)
 
     start_date = "#####"
     if not error:
@@ -242,7 +267,7 @@ def _validate_query_parms(event):
                                                          today.replace(day=1).isoformat()))
         except ValueError as e:
             error = _build_error_response(400,
-                                          f"Invalid start date: {start_date} {e}")
+                                          f"Invalid start date: {start_date} {e}", origin)
     # Default end date: two months after the start date
     end_date = "#####"
     if not error:
@@ -252,13 +277,13 @@ def _validate_query_parms(event):
                                  (start_date + datetime.timedelta(days=60)).isoformat()))
         except ValueError as e:
             error = _build_error_response(400,
-                                          f"Invalid end date: {end_date} {e}")
+                                          f"Invalid end date: {end_date} {e}", origin)
     # Validate date range
     if not error and end_date < start_date:
-        error = _build_error_response(400, "End date cannot be before start date")
+        error = _build_error_response(400, "End date cannot be before start date", origin)
     # Check if the date range exceeds 6 months
     if not error and (end_date - start_date).days > 180:  # approximately 6 months
-        error = _build_error_response(400, "Date range cannot exceed 6 months")
+        error = _build_error_response(400, "Date range cannot exceed 6 months", origin)
 
     return end_date, start_date, property_id, room_type_id, error
 
