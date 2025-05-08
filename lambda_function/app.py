@@ -34,12 +34,13 @@ def lambda_handler(event, _context):
             information for the given property and dates.
     """
     # extract input from query params and validate
-    end_date, start_date, property_id, error = _validate_query_parms(event)
+    end_date, start_date, property_id, room_type_id, error = _validate_query_parms(event)
     if error:
         return error
 
     # Call Lodgify to get availability and rates
-    availability, rates, error = _get_availability_and_rates(property_id, start_date, end_date)
+    availability, rates, error = _get_availability_and_rates(property_id, room_type_id,
+                                                             start_date, end_date)
     if error:
         return error
 
@@ -92,12 +93,11 @@ def lambda_handler(event, _context):
     return _build_response(200, return_data)
 
 
-def _get_availability_and_rates(property_id, start_date, end_date):
+def _get_availability_and_rates(property_id, room_type_id, start_date, end_date):
     api_key, error = _get_api_key()
     if error:
         return None, None, error
 
-    room_type_id = None
     rates = {}
     with requests.Session() as session:
         session.headers.update({
@@ -107,7 +107,7 @@ def _get_availability_and_rates(property_id, start_date, end_date):
         #  Get property availability
         date_query = f"start={start_date.isoformat()}&" + \
                      f"end={end_date.isoformat()}"
-        url = (f"{LODGIFY_API_BASE}/v2/availability/{property_id}" +
+        url = (f"{LODGIFY_API_BASE}/v2/availability/{property_id}/{room_type_id}" +
                f"?includeDetails=true&{date_query}")
         try:
             response = session.get(url, timeout=TIMEOUT)
@@ -116,10 +116,17 @@ def _get_availability_and_rates(property_id, start_date, end_date):
                     500,
                     f"Error fetching availability: {response.status_code} {response.text}")
             else:
-                availability = response.json()[0]  # assume that just one roomType in prop
-                room_type_id = availability.get('room_type_id', '')
+                # find the availability that matches the room_type_id
+                availability = None
+                for room in response.json():
+                    if room['room_type_id'] == int(room_type_id):
+                        availability = room
+                        break
         except requests.exceptions.RequestException as e:
             error = _build_error_response(500, f"Error fetching availability: {e}")
+
+        if not availability:
+            error = _build_error_response(404, f"Room type {room_type_id} not found")
 
         if not error:
             # get rates
@@ -186,6 +193,11 @@ def _validate_query_parms(event):
     property_id = query_params.get("propertyId")
     if not property_id:
         error = _build_error_response(400, "Missing propertyId query parameter")
+
+    room_type_id = query_params.get("roomTypeId")
+    if not room_type_id:
+        error = _build_error_response(400, "Missing roomTypeId query parameter")
+
     start_date = "#####"
     if not error:
         # Default start date: first day of the current month
@@ -213,7 +225,7 @@ def _validate_query_parms(event):
     if not error and (end_date - start_date).days > 180:  # approximately 6 months
         error = _build_error_response(400, "Date range cannot exceed 6 months")
 
-    return end_date, start_date, property_id, error
+    return end_date, start_date, property_id, room_type_id, error
 
 
 def _date_from_str(date_str):
@@ -222,11 +234,13 @@ def _date_from_str(date_str):
 
 if __name__ == "__main__":
     _property_id = sys.argv[1]
+    _room_type_id = sys.argv[2]
 
     # Create a sample event
     test_event = {
         "queryStringParameters": {
             "propertyId": _property_id,
+            "roomTypeId": _room_type_id,
             "startDate": "2025-05-01",
             "endDate": "2025-06-30"
         }

@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", function () {
   const calendarElement = document.getElementById("calendar");
   const propertyId = calendarElement.dataset.propertyId
+  const roomTypeId = calendarElement.dataset.roomTypeId
   const apiBaseUrl = window.LODGIFY_CALENDAR_API_BASE_URL || 'http://localhost:3000';
 
 
@@ -59,7 +60,8 @@ document.addEventListener("DOMContentLoaded", function () {
   async function fetchCalendarDates(startDate, signal) {
     const start = new Date(startDate);
     const end = addMonths(start, 2); // Calculate 2 months ahead
-    const queryString = `?propertyId=${propertyId}&startDate=${start.toISOString().split("T")[0]}&endDate=${end}`;
+    const queryString = `?propertyId=${propertyId}&roomTypeId=${roomTypeId}` +
+        `&startDate=${start.toISOString().split("T")[0]}&endDate=${end}`;
     const url = `${apiBaseUrl}/calendar-data` + queryString;
 
     const response = await fetch(url, { signal }); // Pass the signal here
