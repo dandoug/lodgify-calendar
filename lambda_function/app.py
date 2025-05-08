@@ -15,6 +15,9 @@ TIMEOUT = 10
 
 LODGIFY_API_BASE = 'https://api.lodgify.com'
 
+# Global variable to hold the cached API key
+_cached_api_key = None
+
 
 # pylint: disable=too-many-locals
 def lambda_handler(event, _context):
@@ -93,6 +96,7 @@ def lambda_handler(event, _context):
     # Return JSON response
     return _build_response(200, return_data)
 
+
 def _get_availability(property_id, room_type_id, start_date, end_date, headers):
 
     availability = None
@@ -148,7 +152,7 @@ def _get_rates(property_id, room_type_id, start_date, end_date, headers):
 
 
 def _get_availability_and_rates(property_id, room_type_id, start_date, end_date):
-    # Get API key we need to build the headers used for both requests
+    # Get the API key we need to build the headers used for both requests
     api_key, error = _get_api_key()
     if error:
         return None, None, error
@@ -160,7 +164,7 @@ def _get_availability_and_rates(property_id, room_type_id, start_date, end_date)
     # Call Lodgify to get availability and rates in parallel
     with ThreadPoolExecutor(max_workers=2) as executor:
         future_availability = executor.submit(_get_availability, property_id, room_type_id,
-                                             start_date, end_date, headers)
+                                              start_date, end_date, headers)
         future_rates = executor.submit(_get_rates, property_id, room_type_id,
                                        start_date, end_date, headers)
         # wait for the results
@@ -188,24 +192,32 @@ def _build_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
 
 
 def _get_api_key():
+    global _cached_api_key  # Use the global variable
+    if _cached_api_key is not None:
+        # Return the cached API key if it's already fetched
+        return _cached_api_key, None
+
+    # Fetch the API key only once
     secret_service_url_base = os.environ.get('SECRET_SERVICE_BASE_URL')
     secret_name = os.environ.get('SECRET_NAME')
     url = f"{secret_service_url_base}/secretsmanager/get?secretId={secret_name}"
     headers = {"X-Aws-Parameters-Secrets-Token": os.environ.get('AWS_SESSION_TOKEN')}
-    api_key = None
+
     try:
         response = requests.get(url, headers=headers, timeout=5)
-        error = None
-        api_key = None
         if response.status_code != 200:
             error = _build_error_response(
                 500,
-                f"Error fetching secret {secret_name}: {response.status_code} {response.text}")
-        else:
-            api_key = response.json()['SecretString']
+                f"Error fetching secret {secret_name}: {response.status_code} {response.text}"
+            )
+            return None, error
+        # Cache the API key in memory
+        _cached_api_key = response.json()['SecretString']
     except requests.exceptions.RequestException as e:
         error = _build_error_response(500, f"Error fetching secret {secret_name}: {e}")
-    return api_key, error
+        return None, error
+
+    return _cached_api_key, None
 
 
 def _validate_query_parms(event):
@@ -280,6 +292,6 @@ if __name__ == "__main__":
             self.memory_limit_in_mb = 128
 
 
-    # Call the handler
+    # Call the handle
     result = lambda_handler(test_event, _StubContext())
     print(json.dumps(result, indent=2))
