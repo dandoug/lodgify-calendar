@@ -56,29 +56,59 @@ document.addEventListener("DOMContentLoaded", function () {
     return newDate.toISOString().split("T")[0];
   }
 
-  async function fetchCalendarDates(startDate) {
+  async function fetchCalendarDates(startDate, signal) {
     const start = new Date(startDate);
-    const end = addMonths(start, 2);
+    const end = addMonths(start, 2); // Calculate 2 months ahead
     const queryString = `?propertyId=${propertyId}&startDate=${start.toISOString().split("T")[0]}&endDate=${end}`;
-
     const url = `${apiBaseUrl}/calendar-data` + queryString;
 
-    const response = await fetch(url);
-    const json = await response.json();
-    if (response.status !== 200)
+    const response = await fetch(url, { signal }); // Pass the signal here
+    if (response.status !== 200) {
+      const json = await response.json();
       console.error(`Failed to fetch calendar data: ${json.error}`);
+      return undefined; // Handle fetch errors
+    }
+    const json = await response.json();
     return json.dates;
   }
 
+  let activeFetch = null; // Keeps track of the active fetch in progress
+  let requestCounter = 0;
+
   async function handleCalendarChange(instance) {
+    const currentRequest = ++requestCounter; // Increment counter for each new request
     const currentMonth = instance.currentMonth;
     const currentYear = instance.currentYear;
     const startDate = new Date(currentYear, currentMonth, 1);
-    const apiData = await fetchCalendarDates(startDate);
-    if (apiData === undefined) {
-      console.error("Failed to fetch calendar data.");
-    } else {
-      updateCalendarDays(instance, apiData);
+
+    // Cancel previous fetch if it's still in progress
+    if (activeFetch) {
+      activeFetch.abort(); // Abort the previous request
+    }
+
+    const abortController = new AbortController();
+    activeFetch = abortController;
+
+    try {
+      const apiData = await fetchCalendarDates(startDate, abortController.signal); // Pass signal
+      if (requestCounter === currentRequest) { // Ensure this is still the latest request
+        if (apiData === undefined) {
+          console.error("Failed to fetch calendar data.");
+        } else {
+          updateCalendarDays(instance, apiData);
+        }
+      }
+    } catch (err) {
+      if (err.name === "AbortError") {
+        console.log("Fetch aborted; skipping update.");
+      } else {
+        console.error("Error during fetch:", err);
+      }
+    } finally {
+      // Clear the active fetch if complete
+      if (activeFetch === abortController) {
+        activeFetch = null;
+      }
     }
   }
 
@@ -87,41 +117,62 @@ document.addEventListener("DOMContentLoaded", function () {
     return window.innerWidth < 640 ? 1 : 2;
   }
 
+  const debouncedHandleCalendarChange = debounce(async function (instance) {
+    await handleCalendarChange(instance);
+  }, 300); // 300ms delay
+
   // Variable to keep track of the Flatpickr instance and current showMonths
   let calendarInstance;
   let currentShowMonths = getShowMonths(); // Initialize with current screen size value
 
   // Function to initialize or reinitialize the Flatpickr calendar
   function initializeCalendar() {
+    let defaultDate = null;
+
+    // Capture the current state of the calendar (leftmost visible month) before destroying it
     if (calendarInstance) {
+      const currentMonth = calendarInstance.currentMonth; // 0-based month index
+      const currentYear = calendarInstance.currentYear; // Year value
+      // Track the leftmost visible date
+      defaultDate = new Date(currentYear, currentMonth, 1);
       calendarInstance.destroy();
     }
 
+    // Recreate the Flatpickr instance
     calendarInstance = flatpickr("#calendar", {
       inline: true,
-      showMonths: currentShowMonths, // Use current number of months
+      showMonths: currentShowMonths, // Use current screen size mode
+      defaultDate: defaultDate || new Date(), // Preserve the visible month or fallback to today
       enable: [],
+      // Fetch days asynchronously, but ensure the visible month is set synchronously
       onReady: async function (selectedDates, dateStr, instance) {
-        const startDate = new Date();
-        startDate.setDate(1);
+        const startDate = defaultDate || new Date(); // Use stored date or fallback to today
+        startDate.setDate(1); // Ensure it's the first day of the month
+        // Jump to the correct month immediately BEFORE the API call finishes
+        instance.jumpToDate(startDate);
+
+        // Fetch backend data asynchronously
         const apiData = await fetchCalendarDates(startDate);
         if (apiData === undefined) {
           console.error("Failed to fetch calendar data.");
         } else {
-          setTimeout(() => {
-            updateCalendarDays(instance, apiData);
-          }, 0);
+          // Update the days asynchronously once data is ready
+          updateCalendarDays(instance, apiData);
         }
       },
       onMonthChange: async function (selectedDates, dateStr, instance) {
-        await handleCalendarChange(instance);
+        debouncedHandleCalendarChange(instance);
       },
       onYearChange: async function (selectedDates, dateStr, instance) {
-        await handleCalendarChange(instance);
+        debouncedHandleCalendarChange(instance);
       },
     });
-  }
 
+    // Immediately jump to the correct month after initialization
+    if (defaultDate) {
+      calendarInstance.jumpToDate(defaultDate); // Ensure Flatpickr immediately aligns with the tracked visible month
+    }
+  }
   // Debounce function to limit event execution
   function debounce(fn, delay) {
     let timeout;

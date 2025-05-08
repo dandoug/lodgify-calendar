@@ -7,7 +7,7 @@ Resources:
       CodeUri: lambda_function/
       Handler: app.lambda_handler
       Runtime: python3.11
-      Timeout: 8
+      Timeout: 10
       Environment:
         Variables:
           SECRET_SERVICE_BASE_URL: ""
