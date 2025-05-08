@@ -1,5 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  Architecture:
+    Type: String
+    Default: x86_64
+    AllowedValues:
+      - arm64
+      - x86_64
+    Description: Architecture for the Lambda function, either arm64 (for Apple Silicon) or x86_64.
+
 Resources:
   CalendarFunction:
     Type: AWS::Serverless::Function
@@ -8,10 +18,12 @@ Resources:
       Handler: app.lambda_handler
       Runtime: python3.11
       Timeout: 10
+      Architectures:
+        - !Ref Architecture
       Environment:
         Variables:
-          SECRET_SERVICE_BASE_URL: ""
-          SECRET_NAME: ""
+          SECRET_SERVICE_BASE_URL: "" # Set during deployment
+          SECRET_NAME: "" # Set during deployment
       Events:
         CalendarAPI:
           Type: Api
