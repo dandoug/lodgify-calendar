@@ -207,10 +207,10 @@ def _validate_query_parms(event):
             error = _build_error_response(400,
                                           f"Invalid end date: {end_date} {e}")
     # Validate date range
-    if end_date < start_date:
+    if not error and end_date < start_date:
         error = _build_error_response(400, "End date cannot be before start date")
     # Check if the date range exceeds 6 months
-    if (end_date - start_date).days > 180:  # approximately 6 months
+    if not error and (end_date - start_date).days > 180:  # approximately 6 months
         error = _build_error_response(400, "Date range cannot exceed 6 months")
 
     return end_date, start_date, property_id, error

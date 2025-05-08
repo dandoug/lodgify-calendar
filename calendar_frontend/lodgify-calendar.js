@@ -1,5 +1,8 @@
 document.addEventListener("DOMContentLoaded", function () {
   const calendarElement = document.getElementById("calendar");
+  const propertyId = calendarElement.dataset.propertyId
+  const apiBaseUrl = window.LODGIFY_CALENDAR_API_BASE_URL || 'http://localhost:3000';
+
 
   function formatDate(date) {
     return date.toISOString().split("T")[0];
@@ -56,12 +59,14 @@ document.addEventListener("DOMContentLoaded", function () {
   async function fetchCalendarDates(startDate) {
     const start = new Date(startDate);
     const end = addMonths(start, 2);
-    const queryString = `?startDate=${start.toISOString().split("T")[0]}&endDate=${end}`;
+    const queryString = `?propertyId=${propertyId}&startDate=${start.toISOString().split("T")[0]}&endDate=${end}`;
 
-    const url = `http://localhost:3000/calendar-data` + queryString;
+    const url = `${apiBaseUrl}/calendar-data` + queryString;
 
     const response = await fetch(url);
     const json = await response.json();
+    if (response.status !== 200)
+      console.error(`Failed to fetch calendar data: ${json.error}`);
     return json.dates;
   }
 
@@ -70,7 +75,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const currentYear = instance.currentYear;
     const startDate = new Date(currentYear, currentMonth, 1);
     const apiData = await fetchCalendarDates(startDate);
-    updateCalendarDays(instance, apiData);
+    if (apiData === undefined) {
+      console.error("Failed to fetch calendar data.");
+    } else {
+      updateCalendarDays(instance, apiData);
+    }
   }
 
   // Function to determine the number of months to show based on screen size
@@ -96,10 +105,13 @@ document.addEventListener("DOMContentLoaded", function () {
         const startDate = new Date();
         startDate.setDate(1);
         const apiData = await fetchCalendarDates(startDate);
-
-        setTimeout(() => {
-          updateCalendarDays(instance, apiData);
-        }, 0);
+        if (apiData === undefined) {
+          console.error("Failed to fetch calendar data.");
+        } else {
+          setTimeout(() => {
+            updateCalendarDays(instance, apiData);
+          }, 0);
+        }
       },
       onMonthChange: async function (selectedDates, dateStr, instance) {
         await handleCalendarChange(instance);

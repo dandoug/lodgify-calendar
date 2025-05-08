@@ -5,12 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Flatpickr Calendar with Prices</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"/>
-  <link rel="stylesheet" href="styles.css"/>
+
+  <!-- lodgiify-styles.css defines flatpickr overrides and should come after flatpickr.min.css -->
+  <link rel="stylesheet" href="lodgiify-styles.css"/>
+
 </head>
 <body>
-  <div id="calendar"></div>
+  <!-- set data-property-id to the Lodgify property id, only one room type supported    -->
+  <!-- no currency conversion done... comes back in whatever current rate was defined   -->
+  <!-- also the $ in the display are hardcoded rn, so really only USD works, but that's -->
+  <!-- a fixable problem.                                                               -->
+  <div id="calendar" data-property-id="669875"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-  <script src="calendar.js"></script>
+  <script>
+    // Set this global var to the base URL where the lambda function is available
+    // When running locally and testing with sam, this is http://localhost:3000
+    // in other environments, it will not be something on localhost. :-)
+    window.LODGIFY_CALENDAR_API_BASE_URL = "http://localhost:3000";
+  </script>
+  <!-- above global must be defined before bringing in lodgify-calendar.js -->
+  <script src="lodgify-calendar.js"></script>
 </body>
 </html>

@@ -11,7 +11,7 @@ fastapi dev secrets_lambda_stub.py --port 2773
 
 ### Launching function with sam
 
-Create an enviornment variables file named `.env-vars` that has 
+Create an enviornment variables file named `.env-vars.json` that has 
 ```json
 {
     "Parameters": {
@@ -23,5 +23,5 @@ Create an enviornment variables file named `.env-vars` that has
 
 and reference it when launching lambda (note that any variables must be defined in the [template.yaml](../template.yaml) file)
 ```bash
-sam local start-api --env-vars tests/.env.json
+sam local start-api --env-vars tests/.env-vars.json
 ```
