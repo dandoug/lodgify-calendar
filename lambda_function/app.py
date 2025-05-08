@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import requests
@@ -92,60 +93,82 @@ def lambda_handler(event, _context):
     # Return JSON response
     return _build_response(200, return_data)
 
+def _get_availability(property_id, room_type_id, start_date, end_date, headers):
+
+    availability = None
+    error = None
+    #  Get property availability
+    date_query = f"start={start_date.isoformat()}&" + \
+                 f"end={end_date.isoformat()}"
+    url = (f"{LODGIFY_API_BASE}/v2/availability/{property_id}/{room_type_id}" +
+           f"?includeDetails=true&{date_query}")
+    try:
+        response = requests.get(url, timeout=TIMEOUT, headers=headers)
+        if response.status_code != 200:
+            error = _build_error_response(
+                500,
+                f"Error fetching availability: {response.status_code} {response.text}")
+        else:
+            # find the availability that matches the room_type_id
+            availability = None
+            for room in response.json():
+                if room['room_type_id'] == int(room_type_id):
+                    availability = room
+                    break
+    except requests.exceptions.RequestException as e:
+        error = _build_error_response(500, f"Error fetching availability: {e}")
+
+    if not error and not availability:
+        error = _build_error_response(404, f"Room type {room_type_id} not found")
+
+    return availability, error
+
+
+def _get_rates(property_id, room_type_id, start_date, end_date, headers):
+
+    rates = {}
+    error = None
+    # get rates
+    try:
+        date_query = f"StartDate={start_date.isoformat()}&" + \
+                     f"EndDate={end_date.isoformat()}"
+        url = (f"{LODGIFY_API_BASE}/v2/rates/calendar?RoomTypeId={room_type_id}" +
+               f"&HouseId={property_id}&{date_query}")
+        response = requests.get(url, timeout=TIMEOUT, headers=headers)
+        if response.status_code != 200:
+            error = _build_error_response(
+                500,
+                f"Error fetching rates: {response.status_code} {response.text}")
+        else:
+            rates = response.json()
+    except requests.exceptions.RequestException as e:
+        error = _build_error_response(500, f"Error fetching availability: {e}")
+
+    return rates, error
+
 
 def _get_availability_and_rates(property_id, room_type_id, start_date, end_date):
+    # Get API key we need to build the headers used for both requests
     api_key, error = _get_api_key()
     if error:
         return None, None, error
-
-    rates = {}
-    with requests.Session() as session:
-        session.headers.update({
+    headers = {
             'X-ApiKey': api_key,
             'Accept': 'application/json'
-        })
-        #  Get property availability
-        date_query = f"start={start_date.isoformat()}&" + \
-                     f"end={end_date.isoformat()}"
-        url = (f"{LODGIFY_API_BASE}/v2/availability/{property_id}/{room_type_id}" +
-               f"?includeDetails=true&{date_query}")
-        try:
-            response = session.get(url, timeout=TIMEOUT)
-            if response.status_code != 200:
-                error = _build_error_response(
-                    500,
-                    f"Error fetching availability: {response.status_code} {response.text}")
-            else:
-                # find the availability that matches the room_type_id
-                availability = None
-                for room in response.json():
-                    if room['room_type_id'] == int(room_type_id):
-                        availability = room
-                        break
-        except requests.exceptions.RequestException as e:
-            error = _build_error_response(500, f"Error fetching availability: {e}")
+        }
 
-        if not availability:
-            error = _build_error_response(404, f"Room type {room_type_id} not found")
+    # Call Lodgify to get availability and rates in parallel
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_availability = executor.submit(_get_availability, property_id, room_type_id,
+                                             start_date, end_date, headers)
+        future_rates = executor.submit(_get_rates, property_id, room_type_id,
+                                       start_date, end_date, headers)
+        # wait for the results
+        availability, availability_error = future_availability.result()
+        rates, rates_error = future_rates.result()
 
-        if not error:
-            # get rates
-            try:
-                date_query = f"StartDate={start_date.isoformat()}&" + \
-                             f"EndDate={end_date.isoformat()}"
-                url = (f"{LODGIFY_API_BASE}/v2/rates/calendar?RoomTypeId={room_type_id}" +
-                       f"&HouseId={property_id}&{date_query}")
-                response = session.get(url, timeout=TIMEOUT)
-                if response.status_code != 200:
-                    error = _build_error_response(
-                        500,
-                        f"Error fetching rates: {response.status_code} {response.text}")
-                else:
-                    rates = response.json()
-            except requests.exceptions.RequestException as e:
-                error = _build_error_response(500, f"Error fetching availability: {e}")
-
-    return availability, rates, error
+    # return the results and an error if there was one
+    return availability, rates, availability_error if availability_error else rates_error
 
 
 def _build_error_response(status_code: int, message: str) -> dict[str, Any]:
