@@ -11,7 +11,7 @@ Parameters:
     Description: Architecture for the Lambda function, either arm64 (for Apple Silicon) or x86_64.
 
 Resources:
-  CalendarFunction:
+  LodgifyCalendarLambda:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: lambda_function/
