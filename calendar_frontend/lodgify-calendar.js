@@ -1,8 +1,20 @@
+
 document.addEventListener("DOMContentLoaded", function () {
   const calendarElement = document.getElementById("calendar");
   const propertyId = calendarElement.dataset.propertyId
   const roomTypeId = calendarElement.dataset.roomTypeId
   const apiBaseUrl = window.LODGIFY_CALENDAR_API_BASE_URL || 'http://localhost:3000';
+
+  const MAX_CACHE_SIZE = 12;
+  const CACHE_TTL_MINUTES = 5;
+
+  const DEBUG_MODE = window.LODGIFY_CALENDAR_DEBUG_MODE || false;
+
+  function debugLog(message, ...optionalParams) {
+    if (DEBUG_MODE) {
+      console.log(message, ...optionalParams);
+    }
+  }
 
   const resizeObserver = new ResizeObserver(() => {
     const newShowMonths = getShowMonths(); // Recompute based on container size
@@ -13,76 +25,162 @@ document.addEventListener("DOMContentLoaded", function () {
   });
   resizeObserver.observe(calendarElement); // Watch the container for size changes
 
+  // Add this cache to manage the fetched data
+  const cache = new Map();
+
+  // Function to create a unique cache key
+  function createCacheKey(propertyId, roomTypeId, startDate, endDate) {
+    return `${propertyId}-${roomTypeId}-${startDate}-${endDate}`;
+  }
+
+  // Function to fetch data with caching
+  async function fetchWithCache(startDate, endDate, signal) {
+    const cacheKey = createCacheKey(propertyId, roomTypeId, startDate, endDate);
+    const now = Date.now();
+
+    // Check if data exists in cache and is not expired
+    if (cache.has(cacheKey)) {
+      const { data, expiration } = cache.get(cacheKey);
+      if (now < expiration) {
+        debugLog("Using cached data for Lodgify calendar");
+        return data; // Return cached data
+      } else {
+        cache.delete(cacheKey); // Remove stale entry
+      }
+    }
+
+    // Fetch the data from the API if not in cache or expired
+    const queryString = `?propertyId=${propertyId}&roomTypeId=${roomTypeId}&startDate=${startDate}&endDate=${endDate}`;
+    const url = `${apiBaseUrl}/calendar-data` + queryString;
+
+    try {
+      const response = await fetch(url, { signal });
+      if (response.status !== 200) {
+        const json = await response.json();
+        console.error(`Failed to fetch calendar data: ${json.error}`);
+        return undefined;
+      }
+
+      const json = await response.json();
+      const data = json.dates;
+
+      // Store fetched data in cache with an expiration time (5 minutes)
+      cache.set(cacheKey, { data, expiration: now + CACHE_TTL_MINUTES * 60 * 1000 });
+
+      // Clean up the cache to ensure it only keeps the last 12 entries
+      if (cache.size > MAX_CACHE_SIZE) {
+        const oldestKey = Array.from(cache.keys())[0];
+        cache.delete(oldestKey);
+      }
+
+      return data;
+    } catch (err) {
+      console.error("Error while fetching data:", err);
+      return undefined;
+    }
+  }
 
 
   function formatDate(date) {
     return date.toISOString().split("T")[0];
   }
 
-  function updateCalendarDays(instance, apiData, retries = 10) {
-    if (!instance.calendarContainer) {
-      if (retries > 0) {
-        setTimeout(() => updateCalendarDays(instance, apiData, retries - 1), 100);
-      } else {
-        console.error("Failed to update calendar days: calendarContainer is not ready.");
-      }
-      return;
+function formatDateLocal(date) {
+  if (!(date instanceof Date)) return null;
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, "0"); // Add leading zero
+  const day = date.getDate().toString().padStart(2, "0"); // Add leading zero
+  return `${year}-${month}-${day}`;
+}
+
+function updateCalendarDays(instance, fetchedData, retries = 10) {
+  if (!instance.calendarContainer) {
+    if (retries > 0) {
+      setTimeout(() => updateCalendarDays(instance, fetchedData, retries - 1), 100);
+    } else {
+      console.error("Failed to update calendar days: calendarContainer is not ready.");
     }
+    return;
+  }
 
-    const allDays = instance.calendarContainer.querySelectorAll(".flatpickr-day");
-    allDays.forEach((day) => {
-      const date = formatDate(day.dateObj);
-      const dayNumber = day.textContent;
+  const allDays = instance.calendarContainer.querySelectorAll(".flatpickr-day");
 
-      day.innerHTML = "";
+  // Loop over all calendar days and fill data
+  allDays.forEach((day) => {
+    const date = formatDateLocal(day.dateObj); // Format as 'yyyy-MM-dd'
+    const dayNumber = day.textContent;
 
-      if (apiData[date]) {
-        if (!apiData[date].available) {
-          day.classList.add("unavailable");
-          day.textContent = dayNumber;
-        } else {
-          day.classList.add("has-price");
+    day.innerHTML = ""; // Clear the current content
 
-          const dayNumberSpan = document.createElement("span");
-          dayNumberSpan.classList.add("day-number");
-          dayNumberSpan.textContent = dayNumber;
+    // Apply the fetched data if available
+    if (fetchedData[date]) {
+      const dayData = fetchedData[date];
+      if (dayData.available) {
+        day.classList.add("has-price");
 
-          const priceSpan = document.createElement("span");
-          priceSpan.classList.add("day-price");
-          priceSpan.textContent = `${apiData[date].price}`; // currency symbol is added by css
+        const dayNumberSpan = document.createElement("span");
+        dayNumberSpan.classList.add("day-number");
+        dayNumberSpan.textContent = dayNumber;
 
-          day.appendChild(dayNumberSpan);
-          day.appendChild(priceSpan);
-        }
+        const priceSpan = document.createElement("span");
+        priceSpan.classList.add("day-price");
+        priceSpan.textContent = `${dayData.price}`; // Add price
+
+        day.appendChild(dayNumberSpan);
+        day.appendChild(priceSpan);
       } else {
         day.classList.add("unavailable");
         day.textContent = dayNumber;
       }
-    });
-  }
-
-  function addMonths(date, months) {
-    const newDate = new Date(date);
-    newDate.setMonth(newDate.getMonth() + months);
-    return newDate.toISOString().split("T")[0];
-  }
-
-  async function fetchCalendarDates(startDate, signal) {
-    const start = new Date(startDate);
-    const end = addMonths(start, 2); // Calculate 2 months ahead
-    const queryString = `?propertyId=${propertyId}&roomTypeId=${roomTypeId}` +
-        `&startDate=${start.toISOString().split("T")[0]}&endDate=${end}`;
-    const url = `${apiBaseUrl}/calendar-data` + queryString;
-
-    const response = await fetch(url, { signal }); // Pass the signal here
-    if (response.status !== 200) {
-      const json = await response.json();
-      console.error(`Failed to fetch calendar data: ${json.error}`);
-      return undefined; // Handle fetch errors
+    } else {
+      // If no data is available, mark as unavailable
+      day.classList.add("unavailable");
+      day.textContent = dayNumber;
     }
-    const json = await response.json();
-    return json.dates;
+  });
+}
+
+function addMonths(date, months) {
+  const localDate = new Date(date.getTime()); // Clone the date to avoid mutation
+  const targetMonth = localDate.getMonth() + months;
+  const targetYear = localDate.getFullYear() + Math.floor(targetMonth / 12);
+  const normalizedMonth = targetMonth % 12;
+
+  // Set the date to the first day of the target month
+  return new Date(targetYear, normalizedMonth, 1); // All in local time
+}
+
+  // Update the fetchCalendarDates function to use the caching mechanism
+async function fetchCalendarDates(startDate, signal) {
+  if (!(startDate instanceof Date)) {
+    throw new RangeError(`Invalid startDate provided: ${startDate}`);
   }
+
+  // Calculate the range based on the number of months to display
+  const endDate = addMonths(startDate, Math.max(currentShowMonths, 2)); // At least 2 months
+
+  // Format both the start and end dates as `yyyy-MM-dd` (local time zone)
+  const startFormatted = formatDateLocal(startDate);
+  const endFormatted = formatDateLocal(endDate);
+
+  // Check if this range is already cached
+  const cacheKey = createCacheKey(propertyId, roomTypeId, startFormatted, endFormatted);
+  if (cache.has(cacheKey)) {
+    debugLog(`Using cached data for range: ${startFormatted} to ${endFormatted}`);
+    return cache.get(cacheKey).data;
+  }
+
+  // Otherwise, fetch and cache the new data
+  debugLog(`Fetching calendar data for: ${startFormatted} to ${endFormatted}`);
+  const fetchedData = await fetchWithCache(startFormatted, endFormatted, signal);
+
+  if (!fetchedData) {
+    console.error(`Failed to fetch data for range: ${startFormatted} to ${endFormatted}`);
+    return {}; // Return empty data
+  }
+
+  return fetchedData; // Return newly fetched data
+}
 
   let activeFetch = null; // Keeps track of the active fetch in progress
   let requestCounter = 0;
@@ -91,7 +189,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const currentRequest = ++requestCounter; // Increment counter for each new request
     const currentMonth = instance.currentMonth;
     const currentYear = instance.currentYear;
-    const startDate = new Date(currentYear, currentMonth, 1);
+    const startDate = new Date(Date.UTC(currentYear, currentMonth, 1)); // Create date in UTC
 
     // Cancel previous fetch if it's still in progress
     if (activeFetch) {
@@ -124,6 +222,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
+
   // Function to determine the number of months to show based on the container size
   function getShowMonths() {
     const calendarContainer = document.getElementById("calendar"); // Get the container element
@@ -133,62 +232,78 @@ document.addEventListener("DOMContentLoaded", function () {
     return containerWidth < 640 ? 1 : 2;
   }
 
-  const debouncedHandleCalendarChange = debounce(async function (instance) {
-    await handleCalendarChange(instance);
-  }, 300); // 300ms delay
+function getVisibleDateRange(instance) {
+  const firstVisibleMonth = instance.currentMonth; // 0-based index for leftmost visible month
+  const firstVisibleYear = instance.currentYear;
+
+  // Begin at the start of the first visible month
+  const startDate = new Date(firstVisibleYear, firstVisibleMonth, 1);
+
+  // End date = last day of the last visible month
+  const endDate = addMonths(startDate, instance.config.showMonths); // Add visible months
+  endDate.setDate(0); // Move to the last day of the month
+
+  return { start: startDate, end: endDate }; // Return both start and end of range
+}
+
+
+const debouncedHandleCalendarChange = debounce(async function (instance) {
+  const visibleRange = getVisibleDateRange(instance); // Calculate accurate visible date range
+  const apiData = await fetchCalendarDates(visibleRange.start, null); // Fetch for visible months
+  if (apiData) {
+    updateCalendarDays(instance, apiData); // Update calendar with fetched data
+  }
+}, 300); // Debounce delay
+
 
   // Variable to keep track of the Flatpickr instance and current showMonths
   let calendarInstance;
   let currentShowMonths = getShowMonths(); // Initialize with current screen size value
 
   // Function to initialize or reinitialize the Flatpickr calendar
-  function initializeCalendar() {
-    let defaultDate = null;
+function initializeCalendar() {
+  let defaultDate;
 
-    // Capture the current state of the calendar (leftmost visible month) before destroying it
-    if (calendarInstance) {
-      const currentMonth = calendarInstance.currentMonth; // 0-based month index
-      const currentYear = calendarInstance.currentYear; // Year value
-      // Track the leftmost visible date
-      defaultDate = new Date(currentYear, currentMonth, 1);
-      calendarInstance.destroy();
-    }
+  if (calendarInstance) {
+    const currentMonth = calendarInstance.currentMonth;
+    const currentYear = calendarInstance.currentYear;
 
-    // Recreate the Flatpickr instance
-    calendarInstance = flatpickr("#calendar", {
-      inline: true,
-      showMonths: currentShowMonths, // Use current screen size mode
-      defaultDate: defaultDate || new Date(), // Preserve the visible month or fallback to today
-      enable: [],
-      // Fetch days asynchronously, but ensure the visible month is set synchronously
-      onReady: async function (selectedDates, dateStr, instance) {
-        const startDate = defaultDate || new Date(); // Use stored date or fallback to today
-        startDate.setDate(1); // Ensure it's the first day of the month
-        // Jump to the correct month immediately BEFORE the API call finishes
-        instance.jumpToDate(startDate);
-
-        // Fetch backend data asynchronously
-        const apiData = await fetchCalendarDates(startDate);
-        if (apiData === undefined) {
-          console.error("Failed to fetch calendar data.");
-        } else {
-          // Update the days asynchronously once data is ready
-          updateCalendarDays(instance, apiData);
-        }
-      },
-      onMonthChange: async function (selectedDates, dateStr, instance) {
-        debouncedHandleCalendarChange(instance);
-      },
-      onYearChange: async function (selectedDates, dateStr, instance) {
-        debouncedHandleCalendarChange(instance);
-      },
-    });
-
-    // Immediately jump to the correct month after initialization
-    if (defaultDate) {
-      calendarInstance.jumpToDate(defaultDate); // Ensure Flatpickr immediately aligns with the tracked visible month
-    }
+    defaultDate = new Date(currentYear, currentMonth, 1); // Leftmost visible month
+    calendarInstance.destroy(); // Destroy the existing instance
+  } else {
+    const today = new Date(); // Current local date
+    defaultDate = new Date(today.getFullYear(), today.getMonth(), 1); // Start of the month
   }
+
+  currentShowMonths = getShowMonths(); // Dynamically determine visible months
+
+  calendarInstance = flatpickr("#calendar", {
+    inline: true,
+    showMonths: currentShowMonths, // Adjust dynamically
+    defaultDate: defaultDate,
+    enable: [],
+    parseDate: (dateStr, format) => {
+      const date = flatpickr.parseDate(dateStr, format);
+      return date ? new Date(date) : null;
+    },
+    formatDate: (date, format) => {
+      return flatpickr.formatDate(date, format);
+    },
+    // Debounced handlers to ensure proper fetching & updates
+    onReady: async function (selectedDates, dateStr, instance) {
+      debouncedHandleCalendarChange(instance);
+    },
+    onMonthChange: async function (selectedDates, dateStr, instance) {
+      debouncedHandleCalendarChange(instance);
+    },
+    onYearChange: async function (selectedDates, dateStr, instance) {
+      debouncedHandleCalendarChange(instance);
+    },
+  });
+
+  calendarInstance.jumpToDate(defaultDate); // Correct positioning
+}
+
   // Debounce function to limit event execution
   function debounce(fn, delay) {
     let timeout;
