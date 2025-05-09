@@ -34,15 +34,17 @@
     </div>
   </div>
 
+  <script>
+    window.addEventListener('DOMContentLoaded', function () {
+      // When running locally and testing with sam, the base url is http://localhost:3000 (default)
+      // In other environments, it will not be something on localhost. :-)
+      lodgifyPriceAvailabilityCalendar('calendar', {
+          api_base_url: 'http://localhost:3000',
+      });
+    });
+  </script>
 
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-  <script>
-    // Set this global var to the base URL where the lambda function is available
-    // When running locally and testing with sam, this is http://localhost:3000
-    // in other environments, it will not be something on localhost. :-)
-    window.LODGIFY_CALENDAR_API_BASE_URL = "http://localhost:3000";
-  </script>
-  <!-- above global must be defined before bringing in lodgify-calendar.js -->
   <script src="lodgify-calendar.js"></script>
 
   <!-- Bootstrap 4 and jquery not needed for calendar, but used for this example-->
