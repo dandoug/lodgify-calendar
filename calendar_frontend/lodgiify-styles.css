@@ -48,3 +48,7 @@
 .dayContainer {
   margin-bottom: 3px;
 }
+
+.flatpickr-current-month span.cur-month {
+  font-weight: normal !important; /* Adjust text to not be bold */
+}
