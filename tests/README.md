@@ -43,4 +43,17 @@ sam local start-api --parameter-overrides Architecture=arm64 --env-vars tests/.e
 
 ### Deployment
 
-...tbd
+I'm still not comfortable doing everything with sam.  I know I can, I just didn't have time to learn while working on this, so I did it manually.  I'm pretty command-line phobic for most things.
+
+1. Build for the execution environment
+```bash
+sam build --use-container --parameter-overrides Architecture=x86_64
+```
+
+2. Build .zip package for deployment
+```bash
+cd .aws-sam/build/LodgifyCalendarLambda 
+zip -r ~/deploy.zip .
+```
+
+3. Upload `~/deploy.zip` via the console (and do anything else you need there)
