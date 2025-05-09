@@ -4,6 +4,16 @@ document.addEventListener("DOMContentLoaded", function () {
   const roomTypeId = calendarElement.dataset.roomTypeId
   const apiBaseUrl = window.LODGIFY_CALENDAR_API_BASE_URL || 'http://localhost:3000';
 
+  const resizeObserver = new ResizeObserver(() => {
+    const newShowMonths = getShowMonths(); // Recompute based on container size
+    if (newShowMonths !== currentShowMonths) {
+     currentShowMonths = newShowMonths;
+     initializeCalendar(); // Reinitialize with new showMonths
+    }
+  });
+  resizeObserver.observe(calendarElement); // Watch the container for size changes
+
+
 
   function formatDate(date) {
     return date.toISOString().split("T")[0];
@@ -114,9 +124,13 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Function to determine the number of months to show based on screen size
+  // Function to determine the number of months to show based on the container size
   function getShowMonths() {
-    return window.innerWidth < 640 ? 1 : 2;
+    const calendarContainer = document.getElementById("calendar"); // Get the container element
+    const containerWidth = calendarContainer.offsetWidth; // Use the container's width
+
+    // Adjust logic based on the container size
+    return containerWidth < 640 ? 1 : 2;
   }
 
   const debouncedHandleCalendarChange = debounce(async function (instance) {
