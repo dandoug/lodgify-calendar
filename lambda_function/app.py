@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import requests
+from cachetools import cached, TTLCache, Cache
 
 TIMEOUT = 6
 
@@ -29,6 +30,18 @@ from http.client import HTTPConnection
 
 if log_level == "DEBUG":
     HTTPConnection.debuglevel = 1
+
+
+class _ResultsCache(TTLCache):
+    def __setitem__(self, key, value, cache_setitem=Cache.__setitem__):
+        # Value is a tuple of (availability, rates, error)
+        # Only add to cache if error is None
+        if value[2] is None:
+            super().__setitem__(key, value, cache_setitem=cache_setitem)
+
+
+# cache for saving results of calls to Lodgify API so that we call less often
+CACHE_TTL_SECONDS = 300
 
 
 # pylint: disable=too-many-locals
@@ -63,6 +76,7 @@ def lambda_handler(event, _context):
     # Call Lodgify to get availability and rates
     availability, rates, error = _get_availability_and_rates(property_id, room_type_id,
                                                              start_date, end_date, origin)
+    logging.warning(_get_availability_and_rates.cache_info())
     if error:
         return error
 
@@ -189,6 +203,13 @@ def _get_rates(property_id, room_type_id, start_date, end_date, headers, origin)
     return rates, error
 
 
+def _cache_key(property_id, room_type_id, start_date, end_date, origin):
+    # don't include origin in the cache key, it is not relevant to what is cached
+    return f"{property_id}_{room_type_id}_{start_date}_{end_date}"
+
+
+@cached(cache=_ResultsCache(maxsize=1024, ttl=CACHE_TTL_SECONDS),
+        key=_cache_key, info=True)
 def _get_availability_and_rates(property_id, room_type_id, start_date, end_date, origin):
     # Get the API key we need to build the headers used for both requests
     api_key, error = _get_api_key(origin)
@@ -216,7 +237,6 @@ def _get_availability_and_rates(property_id, room_type_id, start_date, end_date,
                 500, f"Request timed out while fetching availability or rates {e}", origin
             )
             return None, None, error
-
 
     # return the results and an error if there was one
     return availability, rates, availability_error if availability_error else rates_error
