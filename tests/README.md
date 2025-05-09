@@ -57,3 +57,7 @@ zip -r ~/deploy.zip .
 ```
 
 3. Upload `~/deploy.zip` via the console (and do anything else you need there)
+
+#### Deployment architecture
+
+Calendar requests like this for my short-term rental page are light, very light.  So, hosting the API aggregator to produce the calendar data, [app.py](../lambda_function/app.py), as a lambda function makes sense.  It, and the [.js](../calendar_frontend/lodgify-calendar.js) and [.css](../calendar_frontend/lodgiify-styles.css) files sit behand an API gateway.  To further protect them from abuse, I set throttling limits.  The lambda function also implements CORS whitelisting of allowed domains, so you wont be able to just in a reference on your own webpage without getting errors in the browser.   You are more than welcome to clone this project and adapt it for your own needs and deploy your own resources.  

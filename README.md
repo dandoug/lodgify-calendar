@@ -8,6 +8,6 @@ Like this
 
 ## Project contents
 
-This project contains a lambda function in [app.py](lambda_function/app.py) and a test driver [index.html](calendar_frontend/index.html) to execute it.  Instructions for running in a test environment are [provided](tests/README.md).  
+This project contains a lambda function in [app.py](lambda_function/app.py) and a test driver [index.html](calendar_frontend/index.html) to execute it.  Instructions for running in a test environment and some general notes about production deployment are [provided](tests/README.md).  
 
 Note, there are two `requirements.txt` files.  The one in the `lambda_function` directory, [requirements.txt](lambda_function/requirements.txt) is a minimal version designed for the lambda_function deployment in a container.  The one in this directory, [requirements.txt](requirements.txt) is a full version required to setup the dev/test envionment, run support services, etc.
