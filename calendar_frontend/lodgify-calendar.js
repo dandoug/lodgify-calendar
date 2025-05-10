@@ -172,14 +172,7 @@ function lodgifyPriceAvailabilityCalendar(calendarDivId, options = {})  {
       const startFormatted = formatDateLocal(startDate);
       const endFormatted = formatDateLocal(endDate);
 
-      // Check if this range is already cached
-      const cacheKey = createCacheKey(propertyId, roomTypeId, startFormatted, endFormatted);
-      if (cache.has(cacheKey)) {
-          debugLog(`Using cached data for range: ${startFormatted} to ${endFormatted}`);
-          return cache.get(cacheKey).data;
-      }
-
-      // Otherwise, fetch and cache the new data
+      // fetch the new data using the cached version, if available
       debugLog(`Fetching calendar data for: ${startFormatted} to ${endFormatted}`);
       const fetchedData = await fetchWithCache(startFormatted, endFormatted, signal);
 
