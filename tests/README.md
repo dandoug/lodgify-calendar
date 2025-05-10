@@ -4,9 +4,9 @@
 
 The lambda function using the AWS secrets layer in production.  To simulate this in test, there is a simple HTTP server implemented in python that you should start and leave running.
 
-Create a `.secrets.json` file (this is never checked in) in the [tests](.), that contains `"key": "value"` pairs of secrets you wish to simulate.  The `key` is the ARN of the secret and the value is the value you wish to return.  The file should be placed in the 
+Create a `.secrets.json` file (this is never checked in) in the [tests](.), that contains `"key": "value"` pairs of secrets you wish to simulate.  The `key` is the ARN of the secret and the value is the value you wish to return.  The file should be placed in the tests directory.
 
-In the [tests](.) (wehre this README.md is located) run the secrets server with
+In the [tests](.) (where this README.md is located) run the secrets server with
 ```bash
 fastapi dev secrets_lambda_stub.py --port 2773
 ```
@@ -18,7 +18,8 @@ Create an environment variables file named `.env-vars.json` that has
 {
     "Parameters": {
         "SECRET_SERVICE_BASE_URL": "http://host.docker.internal:2773",
-        "SECRET_NAME": "...your secret arn here..."
+        "SECRET_NAME": "...your secret arn here...",
+        "CORS_SPLAT": "True"
     }
 }
 ```

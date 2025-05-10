@@ -25,7 +25,7 @@ Resources:
         Variables:
           SECRET_SERVICE_BASE_URL: "" # Set during deployment
           SECRET_NAME: "" # Set during deployment
-          "CORS_WHITELIST": "" # Set during deployment
+          "CORS_SPLAT": "" # Set during deployment
       Events:
         CalendarAPI:
           Type: Api
