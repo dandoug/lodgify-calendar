@@ -1,6 +1,7 @@
 """
 Methods to call Lodgify API to get availability and rate data for a property and room
 """
+import datetime
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -9,10 +10,10 @@ import requests
 from cachetools import cached
 
 from caching import ResultsCache, cache_key
-from helpers import build_error_response
+from helpers import build_error_response, date_from_str
 
 # Global variable to hold the cached API key
-_cached_api_key = None
+_cached_api_key = None  # pylint: disable=invalid-name
 
 # Global timeout value (seconds) used when calling Lodgify API.
 TIMEOUT = 6
@@ -23,6 +24,7 @@ LODGIFY_API_BASE = 'https://api.lodgify.com'
 CACHE_TTL_SECONDS = 300
 
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 def get_availability(property_id, room_type_id, start_date, end_date, headers, origin):
     """ Get the availability data for the given property and room type."""
     availability = None
@@ -54,6 +56,7 @@ def get_availability(property_id, room_type_id, start_date, end_date, headers, o
     return availability, error
 
 
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 def get_rates(property_id, room_type_id, start_date, end_date, headers, origin):
     """
     Get the rate data for the given property and room type.
@@ -79,6 +82,7 @@ def get_rates(property_id, room_type_id, start_date, end_date, headers, origin):
     return rates, error
 
 
+# pylint: disable=too-many-locals
 @cached(cache=ResultsCache(maxsize=1024, ttl=CACHE_TTL_SECONDS),
         key=cache_key, info=True)
 def get_availability_and_rates(property_id, room_type_id, start_date, end_date, origin):
@@ -120,7 +124,7 @@ def get_api_key(origin):
     """
     Get the API key we need to call Lodgify
     """
-    global _cached_api_key  # Use the global variable
+    global _cached_api_key  # pylint: disable=global-statement
     if _cached_api_key is not None:
         # Return the cached API key if it's already fetched
         return _cached_api_key, None
@@ -136,7 +140,8 @@ def get_api_key(origin):
         if response.status_code != 200:
             error = build_error_response(
                 500,
-                f"Error fetching secret {secret_name}: {response.status_code} {response.text}", origin)
+                f"Error fetching secret {secret_name}: " +
+                f"{response.status_code} {response.text}", origin)
             return None, error
         # Cache the API key in memory
         # logging.debug("Secret received: %s", response.json())
@@ -147,3 +152,52 @@ def get_api_key(origin):
         return None, error
 
     return _cached_api_key, None
+
+
+def merge_calendar_availability_and_price_data(start_date, end_date, property_id,
+                                               availability, rates, ):
+    """
+    Merge the availability and rate data into a response the front-end calendar can use
+    """
+    dates = {}
+    return_data = {
+        "startDate": start_date.isoformat(),
+        "endDate": end_date.isoformat(),
+        "propertyId": property_id,
+        "room_type_id": availability.get('room_type_id', ''),
+        "currency_code": rates.get('rate_settings', {}).get('currency_code', 'USD'),
+        "dates": dates
+    }
+    # Build calendar data
+    advanced_notice_days = rates.get('rate_settings', {}).get('advance_notice_days', 2)
+    first_bookable_day = datetime.date.today() + datetime.timedelta(days=advanced_notice_days)
+    # initialize the date map with empty entries
+    date_range = (end_date - start_date).days + 1
+    for i in range(date_range):
+        current_date = start_date + datetime.timedelta(days=i)
+        dates[current_date.isoformat()] = {}
+    # process the periods and mark the entries as available or not available
+    for period in availability.get('periods', []):
+        period_available = period['available'] == 1
+        period_date = date_from_str(period['start'])
+        period_end = date_from_str(period['end'])
+        while period_end >= period_date:
+            if period_available and period_date >= first_bookable_day:
+                dates[period_date.isoformat()]["available"] = True
+            else:
+                dates[period_date.isoformat()]["available"] = False
+            period_date += datetime.timedelta(days=1)
+    # for all the rates now, add them to their available day
+    for cal in rates.get('calendar_items', []):
+        if not cal.get('date'):
+            continue  # skip any rates without a date
+        rate_date = cal['date']
+        if not dates[rate_date].get('available'):
+            continue  # don't need rates in unavailable days
+        prices = cal.get('prices', [])
+        price = None
+        if isinstance(prices, list) and len(prices) > 0:  # Check if prices is a valid list
+            price = prices[0].get('price_per_day')  # fetch the first 'price_per_day'
+        if price:
+            dates[rate_date]['price'] = price
+    return return_data

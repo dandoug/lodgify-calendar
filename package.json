@@ -1,0 +1,14 @@
+{
+  "name": "lodgify-calendar",
+  "version": "1.0.0",
+  "description": "This project is for developing a AWS Lambda service to consolidate the price and availabilty data from a lodgify listing and display it on a compact calendar.",
+  "main": "calendar_frontend",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "eslint": "^9.26.0",
+    "stylelint": "^16.19.1",
+    "stylelint-config-standard": "^38.0.0"
+  }
+}

@@ -61,4 +61,40 @@ zip -r ~/deploy.zip .
 
 #### Deployment architecture
 
-Calendar requests like this for my short-term rental page are light, very light.  So, hosting the API aggregator to produce the calendar data, [app.py](../lambda_function/app.py), as a lambda function makes sense.  It, and the [.js](../calendar_frontend/lodgify-calendar.js) and [.css](../calendar_frontend/lodgiify-styles.css) files sit behand an API gateway.  To further protect them from abuse, I set throttling limits.  The lambda function also implements CORS whitelisting of allowed domains, so you wont be able to just in a reference on your own webpage without getting errors in the browser.   You are more than welcome to clone this project and adapt it for your own needs and deploy your own resources.  
+Calendar requests like this for my short-term rental page are light, very light.  So, hosting the API aggregator to produce the calendar data, [app.py](../lambda_function/app.py), as a lambda function makes sense.  It, and the [.js](../calendar_frontend/lodgify-calendar.js) and [.css](../calendar_frontend/lodgify-styles.css) files sit behand an API gateway.  To further protect them from abuse, I set throttling limits.  The lambda function also implements CORS whitelisting of allowed domains, so you wont be able to just in a reference on your own webpage without getting errors in the browser.   You are more than welcome to clone this project and adapt it for your own needs and deploy your own resources.  
+
+
+### Running eslint and styllint locally
+
+This isn't a node project, but if you want to run eslint and stylelint locally to validate any changes to the font-end pieces these are the quick steps
+
+#### Install `nvm`:
+``` bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+```
+
+
+#### Install Node.js 18:
+``` bash
+nvm install 18
+```
+
+#### Install ESLint, Stylelint, and Related Dependencies:
+Run the following command to install the same dependencies as in your pipeline (`eslint`, `stylelint`, ): `stylelint-config-standard`
+``` bash
+npm install eslint stylelint stylelint-config-standard --save-dev
+```
+
+#### Invocations
+
+As done in [pr-checks.yml](../.github/workflows/pr-checks.yml) workflow.
+
+```bash
+npx eslint calendar_frontend/lodgify-calendar.js --max-warnings 0
+```
+
+and
+
+```bash
+npx stylelint "calendar_frontend/**/*.css" --max-warnings 0
+```

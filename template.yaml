@@ -26,9 +26,10 @@ Resources:
           SECRET_SERVICE_BASE_URL: "" # Set during deployment
           SECRET_NAME: "" # Set during deployment
           "CORS_SPLAT": "" # Set during deployment
-      Events:
-        CalendarAPI:
-          Type: Api
-          Properties:
-            Path: /calendar-data
-            Method: GET
+      # gateway configured in AWS console, not via sam -- so the following is just fyi
+      # Events:
+      #  CalendarAPI:
+      #    Type: Api
+      #    Properties:
+      #      Path: /calendar-data
+      #      Method: GET
