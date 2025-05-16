@@ -30,11 +30,11 @@ def setup_logging():
         HTTPConnection.debuglevel = 1
 
 
-def check_origin(event):
+def check_origin(_event):
     """
     It turns out that in production, the CORS check is done by the API gateway.  But
     when running locally, we need to be able to set '*'.  But we don't want to set
-    that all the time because it gets double-set in production, then.  So, we use an
+    that all the time because it gets double-set in production then.  So, we use an
     environment variable CORS_SPLAT, and if that is True, then we set the allowed origin to
     *.  If not, then we don't send the allowed origin header at all and let the gateway
     handle it.
@@ -121,3 +121,14 @@ def date_from_str(date_str):
     Create a Date object from a string in the format YYYY-MM-DD.
     """
     return datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+
+
+# pylint: disable=too-few-public-methods
+class StubContext:
+    """
+    Stub context object for testing Lambda functions.
+    """
+    def __init__(self):
+        self.function_name = "lambda_handler"
+        self.function_version = "$LATEST"
+        self.memory_limit_in_mb = 128

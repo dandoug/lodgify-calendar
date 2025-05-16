@@ -27,7 +27,7 @@
 }
 
 .flatpickr-day.has-price span.day-price::before {
-  content: '$'; /* override this current symbol if you want a different one*/
+  content: '$'; /* override this current symbol if you want a different one */
 }
 
 /* Style for unavailable days */
@@ -45,6 +45,7 @@
   color: #d6d6d6 !important; /* Light grey for unavailable day numbers */
 }
 
+/* stylelint-disable-next-line selector-class-pattern */
 .dayContainer {
   margin-bottom: 3px;
 }

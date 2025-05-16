@@ -1,0 +1,72 @@
+name: Deploy to AWS
+
+on:
+  workflow_dispatch: # This allows manually triggering the action
+  push:
+    branches:
+      - main  # Define the branch for deployments (e.g., main or production)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Check out the repository
+    - name: Checkout code
+      uses: actions/checkout@v4.2.2
+
+    # Install AWS CLI
+    - name: Install AWS SAM CLI
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y awscli
+
+    # Set up Python
+    - name: Setup Python
+      uses: actions/setup-python@v5.6.0
+      with:
+        python-version: '3.11'
+
+    # Install dependencies (for sam cli)
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install aws-sam-cli      
+
+    # Upload front-end files to S3
+    - name: Upload JS and CSS to S3
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      run: |
+        aws s3 cp calendar_frontend/lodgify-calendar.js s3://${{ secrets.S3_BUCKET_NAME }}/
+        aws s3 cp calendar_frontend/lodgify-styles.css s3://${{ secrets.S3_BUCKET_NAME }}/
+
+    # Build Lambda Function
+    - name: Build Lambda Function
+      run: |
+        sam build --use-container --parameter-overrides Architecture=x86_64
+
+    # Zip the build artifact
+    - name: Zip Build Artifact from sam build output
+      run: |
+        cd .aws-sam/build/LodgifyCalendarLambda
+        zip -r ../calendarLambdaDeploy.zip .
+
+    # Update Lambda Function using AWS CLI
+    - name: Update Lambda Function code via S3
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      run: |
+        # Upload the .zip build artifact to S3
+        aws s3 cp .aws-sam/build/calendarLambdaDeploy.zip s3://${{ secrets.S3_BUCKET_NAME }}/calendarLambdaDeploy.zip
+    
+        # Update the Lambda function's code with the uploaded file
+        aws lambda update-function-code --function-name lodgify-calendar \
+                                        --s3-bucket ${{ secrets.S3_BUCKET_NAME }} \
+                                        --s3-key calendarLambdaDeploy.zip
