@@ -71,7 +71,7 @@ pluggy==1.6.0
 pycparser==2.22
 pydantic==2.11.7
 pydantic_core==2.33.2
-Pygments==2.19.1
+Pygments==2.19.2
 pylint==3.3.7
 pyOpenSSL==25.1.0
 pytest==8.3.5
