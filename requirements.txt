@@ -61,7 +61,7 @@ mypy-boto3-schemas==1.38.0
 mypy-boto3-secretsmanager==1.38.0
 mypy-boto3-signer==1.38.0
 mypy-boto3-sqs==1.38.0
-mypy-boto3-stepfunctions==1.38.0
+mypy-boto3-stepfunctions==1.39.0
 mypy-boto3-sts==1.38.0
 mypy-boto3-xray==1.38.0
 networkx==3.4.2
