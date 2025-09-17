@@ -3,7 +3,7 @@ anyio==4.10.0
 arrow==1.3.0
 astroid==3.3.10
 attrs==25.3.0
-aws-sam-cli==1.143.0
+aws-sam-cli==1.144.0
 aws-sam-translator==1.100.0
 aws_lambda_builders==1.57.0
 binaryornot==0.4.4
