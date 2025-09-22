@@ -86,7 +86,7 @@ referencing==0.36.2
 regex==2024.11.6
 requests==2.32.5
 rich==14.1.0
-rich-toolkit==0.14.6
+rich-toolkit==0.15.1
 rpds-py==0.25.1
 ruamel.yaml==0.18.15
 ruamel.yaml.clib==0.2.12
