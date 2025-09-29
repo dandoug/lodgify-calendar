@@ -75,7 +75,7 @@ Pygments==2.19.2
 pylint==3.3.8
 pyOpenSSL==25.1.0
 pytest==8.4.2
-pytest-cov==6.2.1
+pytest-cov==6.3.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
 python-multipart==0.0.20
