@@ -64,7 +64,7 @@ mypy-boto3-sqs==1.40.17
 mypy-boto3-stepfunctions==1.40.0
 mypy-boto3-sts==1.40.0
 mypy-boto3-xray==1.40.21
-networkx==3.4.2
+networkx==3.5
 packaging==25.0
 platformdirs==4.4.0
 pluggy==1.6.0
