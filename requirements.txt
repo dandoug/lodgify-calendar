@@ -46,7 +46,7 @@ jsonpointer==3.0.0
 jsonschema==4.25.1
 jsonschema-specifications==2025.9.1
 markdown-it-py==3.0.0
-MarkupSafe==3.0.2
+MarkupSafe==3.0.3
 mccabe==0.7.0
 mdurl==0.1.2
 mpmath==1.3.0
