@@ -59,7 +59,7 @@ mypy-boto3-kinesis==1.40.60
 mypy-boto3-lambda==1.40.61
 mypy-boto3-s3==1.40.61
 mypy-boto3-schemas==1.40.19
-mypy-boto3-secretsmanager==1.40.60
+mypy-boto3-secretsmanager==1.41.0
 mypy-boto3-signer==1.40.55
 mypy-boto3-sqs==1.40.61
 mypy-boto3-stepfunctions==1.40.60
