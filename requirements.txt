@@ -58,7 +58,7 @@ mypy-boto3-ecr==1.42.3
 mypy-boto3-iam==1.42.4
 mypy-boto3-kinesis==1.42.3
 mypy-boto3-lambda==1.42.3
-mypy-boto3-s3==1.42.3
+mypy-boto3-s3==1.42.10
 mypy-boto3-schemas==1.42.3
 mypy-boto3-secretsmanager==1.42.3
 mypy-boto3-signer==1.42.3
