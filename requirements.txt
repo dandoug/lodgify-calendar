@@ -7,7 +7,7 @@ attrs==25.4.0
 aws-sam-cli==1.150.1
 aws-sam-translator==1.105.0
 aws_lambda_builders==1.60.0
-awscrt==0.30.0
+awscrt==0.29.2
 binaryornot==0.4.4
 blinker==1.9.0
 boto3==1.42.1
@@ -57,11 +57,11 @@ mypy-boto3-cloudformation==1.42.3
 mypy-boto3-ecr==1.42.3
 mypy-boto3-iam==1.42.4
 mypy-boto3-kinesis==1.42.3
-mypy-boto3-lambda==1.42.3
+mypy-boto3-lambda==1.42.8
 mypy-boto3-s3==1.42.10
 mypy-boto3-schemas==1.42.3
-mypy-boto3-secretsmanager==1.42.3
-mypy-boto3-signer==1.42.3
+mypy-boto3-secretsmanager==1.42.8
+mypy-boto3-signer==1.42.7
 mypy-boto3-sqs==1.42.3
 mypy-boto3-stepfunctions==1.42.3
 mypy-boto3-sts==1.42.3
