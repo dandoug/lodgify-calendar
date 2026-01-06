@@ -23,7 +23,7 @@ charset-normalizer==3.4.3
 chevron==0.14.0
 click==8.1.8
 cookiecutter==2.6.0
-coverage==7.13.0
+coverage==7.13.1
 cryptography==45.0.7
 dateparser==1.2.2
 dill==0.4.0
