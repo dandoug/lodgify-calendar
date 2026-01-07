@@ -4,9 +4,9 @@ anyio==4.11.0
 arrow==1.4.0
 astroid==3.3.11
 attrs==25.4.0
-aws-sam-cli==1.150.1
+aws-sam-cli==1.151.0
 aws-sam-translator==1.106.0
-aws_lambda_builders==1.60.0
+aws_lambda_builders==1.61.0
 awscrt==0.29.2
 binaryornot==0.4.4
 blinker==1.9.0
@@ -17,11 +17,11 @@ botocore-stubs==1.42.23
 cachetools==6.2.4
 certifi==2025.11.12
 cffi==1.17.1
-cfn-lint==1.42.1
+cfn-lint==1.43.2
 chardet==5.2.0
 charset-normalizer==3.4.3
 chevron==0.14.0
-click==8.3.1
+click==8.1.8
 cookiecutter==2.6.0
 coverage==7.13.1
 cryptography==45.0.7
