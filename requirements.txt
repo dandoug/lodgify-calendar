@@ -5,7 +5,7 @@ arrow==1.4.0
 astroid==3.3.11
 attrs==25.4.0
 aws-sam-cli==1.150.1
-aws-sam-translator==1.105.0
+aws-sam-translator==1.106.0
 aws_lambda_builders==1.60.0
 awscrt==0.29.2
 binaryornot==0.4.4
