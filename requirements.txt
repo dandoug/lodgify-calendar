@@ -103,7 +103,7 @@ tomlkit==0.13.3
 typer==0.21.1
 types-awscrt==0.30.0
 types-python-dateutil==2.9.0.20251115
-types-s3transfer==0.15.0
+types-s3transfer==0.16.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzdata==2025.2
